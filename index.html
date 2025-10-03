@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>PPV Lens Touch Complication Predictor (R-Style Visualization)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; display: flex; justify-content: center; padding: 20px; background-color: #f4f7f9; }
+        .container { display: flex; gap: 40px; width: 100%; max-width: 1200px; }
+        .input-panel { background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 350px; flex-shrink: 0; }
+        .input-panel h2 { margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 10px; color: #333; font-size: 1.2rem; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-group input { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+        .calculate-button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.3s; }
+        .calculate-button:hover { background-color: #0056b3; }
+        .result-panel { flex-grow: 1; padding: 20px; }
+        .result-panel h3 { color: #333; }
+        .result-item { font-size: 1.2rem; padding: 15px; margin-bottom: 10px; border-radius: 8px; font-weight: 500; }
+        .intersection-yes { background-color: #ffdddd; border-left: 5px solid #d9534f; color: #d9534f; }
+        .intersection-no { background-color: #d4edda; border-left: 5px solid #5cb85c; color: #155724; }
+        canvas { border: 1px solid #ccc; background-color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="input-panel">
+        <h2>Predictive model of intraoperative lens touch during pars plana vitrectomy using ocular biometry</h2>
+<a href="https://github.com/skarlxo1985/Predictive-model-of-lens-touch/blob/main/README.md" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+            <button style="width:100%; padding: 10px; margin-bottom: 20px; border: 1px solid #007bff; background-color: #f0f8ff; color: #007bff; border-radius: 5px; cursor: pointer; font-size: 1rem;">
+                Instructions & Disclaimer
+            </button>
+        </a>
+        <div id="input-form">
+            <div class="form-group"><label for="age">Age</label><input type="number" id="age" placeholder="e.g., 89"></div>
+            <div class="form-group"><label for="al">AL (Axial Length, mm)</label><input type="number" id="al" placeholder="e.g., 22.84"></div>
+            <div class="form-group"><label for="cct">CCT (Central Cornea Thickness, mm)</label><input type="number" id="cct" placeholder="e.g., 0.548"></div>
+            <div class="form-group"><label for="acd">ACD (Anterior Chamber Depth, mm)</label><input type="number" id="acd" placeholder="e.g., 2.24"></div>
+            <div class="form-group"><label for="lt">LT (Lens Thickness, mm)</label><input type="number" id="lt" placeholder="e.g., 5.25"></div>
+            <div class="form-group"><label for="k">K (Keratometry, D)</label><input type="number" id="k" placeholder="e.g., 43.55"></div>
+            <div class="form-group"><label for="wtw">WTW (White-to-White, mm)</label><input type="number" id="wtw" placeholder="e.g., 11"></div>
+            <button class="calculate-button" onclick="runSimulation()">Calculate Intersection</button>
+        </div>
+    </div>
+
+    <div class="result-panel">
+        <h3>Intersection Results</h3>
+        <div id="results"><p>Please fill in the values and click 'Calculate Intersection' to see the results.</p></div>
+        <h3 style="margin-top: 30px;">Eye Model Visualization</h3>
+        <canvas id="eyeCanvas" width="700" height="600"></canvas>
+    </div>
+</div>
+
+<script>
+    // --- Core Geometric Calculation Logic (No changes from previous version) ---
+    function bisection(f,a,b,tol=1e-7,maxIter=100){if(f(a)*f(b)>=0)return null;let c=a;for(let i=0;i<maxIter;i++){c=(a+b)/2;if(f(c)===0||(b-a)/2<tol)return c;if(f(c)*f(a)<0)b=c;else a=c}return c}
+    function pointInPolygon(px,py,polyX,polyY){let isInside=!1;for(let i=0,j=polyX.length-1;i<polyX.length;j=i++){const xi=polyX[i],yi=polyY[i],xj=polyX[j],yj=polyY[j],intersect=yi>py!=yj>py&&px<(xj-xi)*(py-yi)/(yj-yi)+xi;intersect&&(isInside=!isInside)}return isInside}
+    function segmentsIntersect(p1x,p1y,p2x,p2y,p3x,p3y,p4x,p4y){function orientation(px,py,qx,qy,rx,ry){const val=(qy-py)*(rx-qx)-(qx-px)*(ry-qy);return Math.abs(val)<1e-10?0:val>0?1:2}function onSegment(px,py,qx,qy,rx,ry){return qx<=Math.max(px,rx)&&qx>=Math.min(px,rx)&&qy<=Math.max(py,ry)&&qy>=Math.min(py,ry)}const o1=orientation(p1x,p1y,p2x,p2y,p3x,p3y),o2=orientation(p1x,p1y,p2x,p2y,p4x,p4y),o3=orientation(p3x,p3y,p4x,p4y,p1x,p1y),o4=orientation(p3x,p3y,p4x,p4y,p2x,p2y);return o1!==0&&o2!==0&&o3!==0&&o4!==0&&o1!==o2&&o3!==o4?!0:o1===0&&onSegment(p1x,p1y,p3x,p3y,p2x,p2y)?!0:o2===0&&onSegment(p1x,p1y,p4x,p4y,p2x,p2y)?!0:o3===0&&onSegment(p3x,p3y,p1x,p1y,p4x,p4y)?!0:o4===0&&onSegment(p3x,p3y,p2x,p2y,p4x,p4y)?!0:!1}
+    function segmentIntersectsLens(x0,y0,x1,y1,polyX,polyY){const n=polyX.length;if(n===0)return!1;for(let i=0;i<n;i++){const j=(i+1)%n;if(segmentsIntersect(x0,y0,x1,y1,polyX[i],polyY[i],polyX[j],polyY[j]))return!0}const inside0=pointInPolygon(x0,y0,polyX,polyY),inside1=pointInPolygon(x1,y1,polyX,polyY);return inside0!==inside1||inside0&&inside1}
+    function runSimulation(){const age=parseFloat(document.getElementById("age").value),al=parseFloat(document.getElementById("al").value),cct=parseFloat(document.getElementById("cct").value),acd=parseFloat(document.getElementById("acd").value),lt=parseFloat(document.getElementById("lt").value),k=parseFloat(document.getElementById("k").value),wtw=parseFloat(document.getElementById("wtw").value);if([age,al,cct,acd,lt,k,wtw].some(isNaN))return void alert("Please fill in all input fields with valid numbers.");const cornea_radius=337.5/k,lens_diameter=8.7582+.009927*age+.00594*lt+.031193*acd+.028481*al,ra=12.9-.057*age,rp=6.2-.012*age,MEASUREMENTS={AL:al,CCT:cct,WTW:wtw,CORNEA_RADIUS:cornea_radius,LENS_THICKNESS:lt,LENS_DIAMETER:lens_diameter,Ra:ra,Rp:rp,ACD:acd},DERIVED={};DERIVED.half_wtw=MEASUREMENTS.WTW/2,DERIVED.cornea_center_y=MEASUREMENTS.AL-MEASUREMENTS.CORNEA_RADIUS,DERIVED.limbus_y=DERIVED.cornea_center_y+Math.sqrt(Math.max(0,MEASUREMENTS.CORNEA_RADIUS**2-DERIVED.half_wtw**2));const f_sclera=r=>r<=DERIVED.half_wtw?1/0:r+Math.sqrt(r**2-DERIVED.half_wtw**2)-DERIVED.limbus_y;DERIVED.sclera_radius=bisection(f_sclera,DERIVED.half_wtw+.1,25)||DERIVED.limbus_y+1,DERIVED.sclera_center_y=DERIVED.sclera_radius,DERIVED.cornea_radius_back=MEASUREMENTS.CORNEA_RADIUS-MEASUREMENTS.CCT,DERIVED.ACD_start_y=DERIVED.cornea_center_y+DERIVED.cornea_radius_back,DERIVED.ACD_end_y=DERIVED.ACD_start_y-MEASUREMENTS.ACD,DERIVED.lens_center_y=DERIVED.ACD_end_y-MEASUREMENTS.LENS_THICKNESS/2;const cy_front=DERIVED.lens_center_y+MEASUREMENTS.LENS_THICKNESS/2-MEASUREMENTS.Ra,cy_back=DERIVED.lens_center_y-MEASUREMENTS.LENS_THICKNESS/2+MEASUREMENTS.Rp,d_centers=Math.abs(cy_back-cy_front);let x_int=1/0;d_centers>0&&d_centers>=Math.abs(MEASUREMENTS.Ra-MEASUREMENTS.Rp)&&d_centers<=MEASUREMENTS.Ra+MEASUREMENTS.Rp&&(a_intersect=(MEASUREMENTS.Ra**2-MEASUREMENTS.Rp**2+d_centers**2)/(2*d_centers),x_int=Math.sqrt(Math.max(0,MEASUREMENTS.Ra**2-a_intersect**2)));const cut_halfwidth=Math.min(MEASUREMENTS.LENS_DIAMETER/2,x_int),x_front=[],y_front=[],x_back=[],y_back=[],n_points=100;for(let i=0;i<n_points;i++){const theta=-Math.PI/2+Math.PI*i/(n_points-1),x=MEASUREMENTS.Ra*Math.sin(theta),y=cy_front+MEASUREMENTS.Ra*Math.cos(theta);Math.abs(x)<=cut_halfwidth&&(x_front.push(x),y_front.push(y))}for(let i=0;i<n_points;i++){const theta=Math.PI/2+Math.PI*i/(n_points-1),x=MEASUREMENTS.Rp*Math.sin(theta),y=cy_back+MEASUREMENTS.Rp*Math.cos(theta);Math.abs(x)<=cut_halfwidth&&(x_back.push(x),y_back.push(y))}const lens_polygon_x=[...x_front,...x_back.reverse()],lens_polygon_y=[...y_front,...y_back.reverse()],limbus_x0=-DERIVED.half_wtw,limbus_y0=DERIVED.limbus_y,sclera_cx=0,sclera_cy=DERIVED.sclera_center_y,r0=4,r1=DERIVED.sclera_radius,d_limbus_sclera=Math.sqrt((sclera_cx-limbus_x0)**2+(sclera_cy-limbus_y0)**2);let sclerotomy_x=0,sclerotomy_y=0;const a_sclerotomy=(r0**2-r1**2+d_limbus_sclera**2)/(2*d_limbus_sclera),h_sq=r0**2-a_sclerotomy**2;h_sq>=0&&(h_sclerotomy=Math.sqrt(h_sq),x2=limbus_x0+a_sclerotomy*(sclera_cx-limbus_x0)/d_limbus_sclera,y2=limbus_y0+a_sclerotomy*(sclera_cy-limbus_y0)/d_limbus_sclera,x3=x2+h_sclerotomy*(sclera_cy-limbus_y0)/d_limbus_sclera,y3=y2-h_sclerotomy*(sclera_cx-limbus_x0)/d_limbus_sclera,x4=x2-h_sclerotomy*(sclera_cy-limbus_y0)/d_limbus_sclera,y4=y2+h_sclerotomy*(sclera_cx-limbus_x0)/d_limbus_sclera,sclerotomy_x=y3<y4?x3:x4,sclerotomy_y=y3<y4?y3:y4);const equator_x=DERIVED.sclera_radius,equator_y=DERIVED.sclera_center_y,angle_offset_1=1/DERIVED.sclera_radius,angle_offset_2=2/DERIVED.sclera_radius,v1_x=DERIVED.sclera_radius*Math.cos(-angle_offset_1),v1_y=DERIVED.sclera_center_y+DERIVED.sclera_radius*Math.sin(-angle_offset_1),v2_x=DERIVED.sclera_radius*Math.cos(-angle_offset_2),v2_y=DERIVED.sclera_center_y+DERIVED.sclera_radius*Math.sin(-angle_offset_2),inter_eq=segmentIntersectsLens(sclerotomy_x,sclerotomy_y,equator_x,equator_y,lens_polygon_x,lens_polygon_y),inter_1mm=segmentIntersectsLens(sclerotomy_x,sclerotomy_y,v1_x,v1_y,lens_polygon_x,lens_polygon_y),inter_2mm=segmentIntersectsLens(sclerotomy_x,sclerotomy_y,v2_x,v2_y,lens_polygon_x,lens_polygon_y);document.getElementById("results").innerHTML=`
+            <div class="result-item ${inter_eq?"intersection-yes":"intersection-no"}"><strong>Equator:</strong> ${inter_eq?"Intersection detected!":"No intersection detected."}</div>
+            <div class="result-item ${inter_1mm?"intersection-yes":"intersection-no"}"><strong>1mm posterior:</strong> ${inter_1mm?"Intersection detected!":"No intersection detected."}</div>
+            <div class="result-item ${inter_2mm?"intersection-yes":"intersection-no"}"><strong>2mm posterior:</strong> ${inter_2mm?"Intersection detected!":"No intersection detected."}</div>
+        `,drawEyeModel({MEASUREMENTS:MEASUREMENTS,DERIVED:DERIVED},{lens_polygon_x:lens_polygon_x,lens_polygon_y:lens_polygon_y,sclerotomy_x:sclerotomy_x,sclerotomy_y:sclerotomy_y,equator_x:equator_x,equator_y:equator_y,v1_x:v1_x,v1_y:v1_y,v2_x:v2_x,v2_y:v2_y,inter_eq:inter_eq,inter_1mm:inter_1mm,inter_2mm:inter_2mm})}
+
+    // --- Heavily updated visualization logic to replicate R plot ---
+    function drawEyeModel(model, points) {
+        const canvas = document.getElementById('eyeCanvas');
+        const ctx = canvas.getContext('2d');
+        const { MEASUREMENTS, DERIVED } = model;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Define plotting area and scaling to maintain aspect ratio
+        const margin = { top: 20, right: 20, bottom: 20, left: 50 };
+        const plotWidth = canvas.width - margin.left - margin.right;
+        const plotHeight = canvas.height - margin.top - margin.bottom;
+        
+        const yMax = Math.max(25, Math.ceil(MEASUREMENTS.AL + 2));
+        const scale = plotHeight / yMax; // Maintain aspect ratio based on Y-axis
+        
+        // Transform model coordinates (mm) to canvas pixel coordinates
+        const transform = (x, y) => ({
+            x: (canvas.width / 2) + x * scale,
+            y: margin.top + plotHeight - y * scale
+        });
+
+        const drawText = (text, x, y, color, options = {}) => {
+            const pos = transform(x, y);
+            ctx.fillStyle = color;
+            ctx.font = options.font || "12px Arial";
+            ctx.textAlign = options.align || "left";
+            ctx.textBaseline = options.baseline || "middle";
+            ctx.fillText(text, pos.x, pos.y);
+        };
+        
+        // 1. Draw Gridlines and Axes
+        ctx.strokeStyle = "#D3D3D3"; // lightgray
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]); // dashed
+        for (let y = 0; y <= yMax; y += 2) {
+            const p_start = transform(-15, y);
+            const p_end = transform(15, y);
+            ctx.beginPath();
+            ctx.moveTo(p_start.x, p_start.y);
+            ctx.lineTo(p_end.x, p_start.y);
+            ctx.stroke();
+            drawText(y, -14, y, "black", { align: "center" });
+        }
+        ctx.setLineDash([]);
+        drawText("Y (mm)", -20, yMax / 2, "black", { font: "bold 14px Arial" });
+
+
+        // 2. Draw Eye Model
+        const n_arc_points = 200;
+        const drawPolygon = (x_coords, y_coords, stroke, fill = null, lineWidth = 2) => {
+            if (x_coords.length === 0) return;
+            ctx.beginPath();
+            let p = transform(x_coords[0], y_coords[0]);
+            ctx.moveTo(p.x, p.y);
+            for (let i = 1; i < x_coords.length; i++) {
+                p = transform(x_coords[i], y_coords[i]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.lineWidth = lineWidth;
+            ctx.strokeStyle = stroke;
+            if (fill) { ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
+            ctx.stroke();
+        };
+
+        // Cornea and Sclera polygons
+        const sclera_poly_x=[], sclera_poly_y=[], cornea_front_x=[], cornea_front_y=[], cornea_back_x=[], cornea_back_y=[];
+        for (let i=0; i<=n_arc_points; i++) {
+            const theta = -Math.PI/2 + (2*Math.PI*i/n_arc_points);
+            const xs = DERIVED.sclera_radius * Math.cos(theta);
+            const ys = DERIVED.sclera_center_y + DERIVED.sclera_radius * Math.sin(theta);
+            sclera_poly_x.push(xs); sclera_poly_y.push(ys);
+            
+            const xcf = MEASUREMENTS.CORNEA_RADIUS * Math.cos(theta);
+            const ycf = DERIVED.cornea_center_y + MEASUREMENTS.CORNEA_RADIUS * Math.sin(theta);
+            cornea_front_x.push(xcf); cornea_front_y.push(ycf);
+
+            const xcb = DERIVED.cornea_radius_back * Math.cos(theta);
+            const ycb = DERIVED.cornea_center_y + DERIVED.cornea_radius_back * Math.sin(theta);
+            cornea_back_x.push(xcb); cornea_back_y.push(ycb);
+        }
+        
+        ctx.save();
+        const clipPath = new Path2D();
+        const p_clip_start = transform(-15, 0);
+        const p_clip_end = transform(15, yMax);
+        clipPath.rect(p_clip_start.x, p_clip_end.y, p_clip_end.x - p_clip_start.x, p_clip_start.y - p_clip_end.y);
+        ctx.clip(clipPath);
+
+        drawPolygon(sclera_poly_x, sclera_poly_y, "black");
+        drawPolygon(cornea_front_x, cornea_front_y, "darkgreen");
+        drawPolygon(cornea_back_x, cornea_back_y, "darkgreen");
+
+        const cornea_fill_x = [...cornea_front_x, ...cornea_back_x.reverse()];
+        const cornea_fill_y = [...cornea_front_y, ...cornea_back_y.reverse()];
+        drawPolygon(cornea_fill_x, cornea_fill_y, "darkgreen", "rgba(0,100,0,0.3)");
+
+        drawPolygon(points.lens_polygon_x, points.lens_polygon_y, "orange", "rgba(255,165,0,0.5)");
+        
+        ctx.restore();
+
+
+        // 3. Draw Annotations
+        const drawSegment = (x0,y0,x1,y1,color) => {
+            const p0=transform(x0,y0), p1=transform(x1,y1);
+            ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y);
+            ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+        };
+
+        drawSegment(-13.5, 0, -13.5, MEASUREMENTS.AL, "red");
+        drawText(`AL = ${MEASUREMENTS.AL.toFixed(2)} mm`, -13, MEASUREMENTS.AL, "red", {baseline:"bottom"});
+        
+        drawSegment(0, DERIVED.ACD_start_y, 0, DERIVED.ACD_end_y, "purple");
+        drawText(`ACD = ${MEASUREMENTS.ACD.toFixed(2)} mm`, 1, (DERIVED.ACD_start_y + DERIVED.ACD_end_y)/2, "purple");
+
+        const cct_y = DERIVED.cornea_center_y + MEASUREMENTS.CORNEA_RADIUS;
+        drawText(`CCT = ${MEASUREMENTS.CCT.toFixed(3)} mm`, 0, cct_y + 0.5, "darkgreen", {align:"center"});
+        
+        drawSegment(-DERIVED.half_wtw, DERIVED.limbus_y, DERIVED.half_wtw, DERIVED.limbus_y, "blue");
+        drawText(`WTW = ${MEASUREMENTS.WTW.toFixed(2)} mm`, 0, DERIVED.limbus_y+0.5, "blue", {align:"center"});
+        
+        const lens_mid_y = DERIVED.lens_center_y + MEASUREMENTS.LENS_THICKNESS/2;
+        drawText(`LT = ${MEASUREMENTS.LENS_THICKNESS.toFixed(2)} mm`, 5, lens_mid_y, "orange");
+
+        // 4. Draw Surgical Paths and Points
+        const drawPoint = (x,y,label) => {
+            const p = transform(x,y);
+            ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, 2*Math.PI);
+            ctx.fillStyle="black"; ctx.fill();
+            if(label) drawText(label, x+0.5, y, "black", {baseline:"top"});
+        };
+
+        drawPoint(points.sclerotomy_x, points.sclerotomy_y, "Trocar");
+        drawPoint(points.equator_x, points.equator_y, "Equator");
+        drawPoint(points.v1_x, points.v1_y, "1mm posterior");
+        drawPoint(points.v2_x, points.v2_y, "2mm posterior");
+
+        const drawPath = (x1,y1,x2,y2,dash=[]) => {
+            const p1=transform(x1,y1), p2=transform(x2,y2);
+            ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
+            ctx.strokeStyle="black"; ctx.lineWidth=2; ctx.setLineDash(dash); ctx.stroke();
+        };
+        drawPath(points.sclerotomy_x, points.sclerotomy_y, points.equator_x, points.equator_y);
+        drawPath(points.sclerotomy_x, points.sclerotomy_y, points.v1_x, points.v1_y, [5, 5]);
+        drawPath(points.sclerotomy_x, points.sclerotomy_y, points.v2_x, points.v2_y, [10, 5]);
+    }
+
+    // The 'window.onload = runSimulation;' line has been removed.
+</script>
+
+</body>
+</html>
