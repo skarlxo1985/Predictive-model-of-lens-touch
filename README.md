@@ -1,5 +1,5 @@
 # Predictive-model-of-lens-touch
-Predictive model of intraoperative lens touch during pars plana vitrectomy using ocular biometry
+This repository provides a two-dimensional geometric eye model designed to identify eyes at high anatomical risk for iatrogenic lens touch during pars plana vitrectomy (PPV).
 
 ## 1. Overview
 This contains an interactive eye model simulator. It allows users to input ocular biometric parameters and visualize whether the surgical trajectory (from trocar to posterior eye segments) intersects with the crystalline lens. The tool provides a graphical illustration comparable to R-based plots described in the manuscript.  
@@ -18,10 +18,10 @@ The model is intended to **illustrate geometric principles** underlying the pred
    - K (Keratometry, diopters)  
    - WTW (White-to-White corneal diameter, mm)  
 2. Click **“Calculate Intersection.”**  
-3. The results panel will show whether the simulated surgical path intersects the lens at:  
-   - Equator  
-   - 1 mm posterior to equator  
-   - 2 mm posterior to equator  
+3. The results panel will show whether the simulated surgical path intersects the lens at the standardized anatomical risk threshold:  
+   - Reference point : 0.71 mm anterior to the equator 
+   - If the path intersects the lens, the eye is classified into the high-risk group, indicating a high geometric susceptibility to iatrogenic lens injury.  
+   - This single-point assessment identifies cases where the anatomical configuration limits the safety margin for instrument manipulation  
 4. A 2D visualization of the eye model is displayed, with annotations for AL, CCT, ACD, LT, WTW, trocar position, and intersection lines.  
 
 ---
